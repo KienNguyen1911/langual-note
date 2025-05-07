@@ -1,0 +1,63 @@
+/* Funnel In-Out Animation Styles */
+@keyframes funnelIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(20px);
+    filter: blur(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes funnelOut {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.8) translateY(20px);
+    filter: blur(10px);
+    display: none;
+  }
+}
+
+.funnel-in {
+  animation: funnelIn 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.funnel-out {
+  animation: funnelOut 0.5s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards;
+}
+
+/* Staggered animation delay for multiple cards */
+.funnel-delay-1 {
+  animation-delay: 0.05s;
+}
+
+.funnel-delay-2 {
+  animation-delay: 0.1s;
+}
+
+.funnel-delay-3 {
+  animation-delay: 0.15s;
+}
+
+.funnel-delay-4 {
+  animation-delay: 0.2s;
+}
+
+/* Animation container */
+.animation-container {
+  transition: all 0.5s ease-in-out;
+  will-change: opacity, transform;
+}
+
+/* Hidden state */
+.hidden {
+  display: none;
+}

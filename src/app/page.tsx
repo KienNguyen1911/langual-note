@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import VocabularyNote from '@/components/VocabularyNote';
 import Translation from '@/components/Translation';
 import TranslationHistory from '@/components/TranslationHistory';
@@ -8,12 +7,18 @@ import VideoPlayer from '@/components/VideoPlayer';
 import AuthButton from '@/components/AuthButton';
 import ThemeToggle from '@/components/ThemeToggle';
 import DotPatternBackground from '@/components/DotPatternBackground';
+import DockMenu from '@/components/DockMenu';
+import AnimatedCard from '@/components/AnimatedCard';
+import { DockMenuProvider, useDockMenu } from '@/components/DockMenuProvider';
 
-export default function Home() {
+// Inner component that uses the dock menu context
+function HomeContent() {
+  const { visibleCards } = useDockMenu();
+
   return (
     <DotPatternBackground>
       <div className="min-h-screen py-4 md:py-8">
-        <header className="max-w-7xl mx-auto mb-8">
+        <header className="max-w-7xl mx-auto mb-8 ml-16">
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-3xl font-bold text-foreground">Language Learning Hub</h1>
             <div className="flex items-center space-x-4">
@@ -26,34 +31,46 @@ export default function Home() {
           </p>
         </header>
 
-        <main className="max-w mx-8">
+        <main className="max-w mx-8 ml-16">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* First column */}
-            <div className="space-y-6">
+            <AnimatedCard isVisible={visibleCards.vocabulary} delay={1} className="space-y-6">
               <VocabularyNote />
-            </div>
+            </AnimatedCard>
 
             {/* Second column */}
-            <div className="space-y-6">
+            <AnimatedCard isVisible={visibleCards.translation} delay={2} className="space-y-6">
               <Translation />
-            </div>
+            </AnimatedCard>
 
             {/* Third column */}
-            <div className="space-y-6">
+            <AnimatedCard isVisible={visibleCards.history} delay={3} className="space-y-6">
               <TranslationHistory />
-            </div>
+            </AnimatedCard>
 
             {/* Fourth column - Video Player with Picture-in-Picture */}
-            <div className="space-y-6">
+            <AnimatedCard isVisible={visibleCards.video} delay={4} className="space-y-6">
               <VideoPlayer />
-            </div>
+            </AnimatedCard>
           </div>
         </main>
 
-        <footer className="max-w-7xl mx-auto mt-12 text-center text-sm text-muted-foreground">
+        <footer className="max-w-7xl mx-auto mt-12 text-center text-sm text-muted-foreground ml-16">
           <p>Language Learning Hub - A simple application to help you learn languages</p>
         </footer>
+
+        {/* Dock Menu */}
+        <DockMenu />
       </div>
     </DotPatternBackground>
+  );
+}
+
+// Main component that provides the dock menu context
+export default function Home() {
+  return (
+    <DockMenuProvider>
+      <HomeContent />
+    </DockMenuProvider>
   );
 }
