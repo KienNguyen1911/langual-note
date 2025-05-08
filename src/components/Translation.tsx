@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface TranslationResult {
   _id?: string;
@@ -14,18 +15,42 @@ interface TranslationResult {
   timestamp: Date | number;
 }
 
-// Mock translation function as mentioned in the README
-const mockTranslate = (text: string): { translatedText: string; detectedLanguage: string } => {
-  // Simple mock implementation
-  const languages = ['English', 'Spanish', 'French', 'German', 'Japanese', 'Chinese', 'Russian', 'Arabic'];
-  const detectedLanguage = languages[Math.floor(Math.random() * languages.length)];
+// Common languages with their codes
+const languages = [
+  { code: 'en', name: 'English' },
+  { code: 'vi', name: 'Vietnamese' },
+  { code: 'fr', name: 'French' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'de', name: 'German' },
+  { code: 'it', name: 'Italian' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'ko', name: 'Korean' },
+  { code: 'zh', name: 'Chinese' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'ar', name: 'Arabic' },
+  { code: 'hi', name: 'Hindi' },
+  { code: 'pt', name: 'Portuguese' },
+];
 
-  // Just reverse the text as a simple "translation" for demo purposes
-  const translatedText = text.split('').reverse().join('');
+// Function to call Google Translate API
+const translateWithGoogleAPI = async (text: string, targetLanguage: string = 'en', sourceLanguage?: string): Promise<{ translatedText: string; detectedLanguage: string }> => {
+  const response = await fetch('/api/google-translate', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ text, targetLanguage, sourceLanguage }),
+  });
 
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to translate text');
+  }
+
+  const data = await response.json();
   return {
-    translatedText,
-    detectedLanguage
+    translatedText: data.translatedText,
+    detectedLanguage: data.detectedLanguage
   };
 };
 
@@ -37,6 +62,9 @@ export default function Translation() {
   const [error, setError] = useState<string | null>(null);
   const [isPipSupported, setIsPipSupported] = useState(false);
   const [isPipActive, setIsPipActive] = useState(false);
+  const [targetLanguage, setTargetLanguage] = useState('en');
+  const [sourceLanguage, setSourceLanguage] = useState<string | null>(null);
+  const [detectedLanguage, setDetectedLanguage] = useState<string | null>(null);
   const translationCardRef = useRef<HTMLDivElement>(null);
   const pipWindowRef = useRef<Window | null>(null);
   const pipTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -50,14 +78,12 @@ export default function Translation() {
   }, []);
 
   // Function to handle translation in the PiP window
-  const handlePipTranslate = async (pipText: string) => {
+  const handlePipTranslate = async (pipText: string, pipTargetLanguage: string, pipSourceLanguage?: string) => {
     if (!pipText.trim()) return;
 
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      const { translatedText, detectedLanguage } = mockTranslate(pipText);
+      // Call Google Translate API with the selected target language and source language (if specified)
+      const { translatedText, detectedLanguage } = await translateWithGoogleAPI(pipText, pipTargetLanguage, pipSourceLanguage);
 
       const result: TranslationResult = {
         originalText: pipText,
@@ -95,12 +121,29 @@ export default function Translation() {
 
       // Update the PiP window with the translation result
       if (pipResultDivRef.current && pipWindowRef.current) {
-        pipResultDivRef.current.innerHTML = `
-          <div style="width: 100%; box-sizing: border-box; overflow-wrap: break-word;">
+        // Find language names
+        const detectedLangName = languages.find(lang => lang.code === savedTranslation.detectedLanguage)?.name || savedTranslation.detectedLanguage;
+        const targetLangName = languages.find(lang => lang.code === targetLanguage)?.name || targetLanguage;
+
+        // Determine what to show for source language
+        let sourceLanguageDisplay = '';
+        if (sourceLanguage) {
+          const sourceLangName = languages.find(lang => lang.code === sourceLanguage)?.name || sourceLanguage;
+          sourceLanguageDisplay = `<div style="width: 100%; box-sizing: border-box; overflow-wrap: break-word;">
             <span class="text-sm text-muted-foreground">
-              Detected language: <strong>${savedTranslation.detectedLanguage}</strong>
+              Source language: <strong>${sourceLangName}</strong>
             </span>
-          </div>
+          </div>`;
+        } else {
+          sourceLanguageDisplay = `<div style="width: 100%; box-sizing: border-box; overflow-wrap: break-word;">
+            <span class="text-sm text-muted-foreground">
+              Detected language: <strong>${detectedLangName}</strong>
+            </span>
+          </div>`;
+        }
+
+        pipResultDivRef.current.innerHTML = `
+          ${sourceLanguageDisplay}
           <div class="space-y-2" style="width: 100%; box-sizing: border-box;">
             <h3 class="font-semibold">Original Text:</h3>
             <div class="p-3 bg-muted rounded-md" style="word-break: break-word; overflow-wrap: break-word; white-space: normal; max-width: 100%; box-sizing: border-box;">
@@ -108,13 +151,13 @@ export default function Translation() {
             </div>
           </div>
           <div class="space-y-2" style="width: 100%; box-sizing: border-box;">
-            <h3 class="font-semibold">Translation:</h3>
+            <h3 class="font-semibold">Translation (${targetLangName}):</h3>
             <div class="p-3 bg-muted rounded-md" style="word-break: break-word; overflow-wrap: break-word; white-space: normal; max-width: 100%; box-sizing: border-box;">
               ${savedTranslation.translatedText}
             </div>
           </div>
           <div class="text-xs text-muted-foreground mt-2" style="width: 100%; box-sizing: border-box; overflow-wrap: break-word;">
-            Note: This is using a mock translation function.
+            Powered by Google Translate API
           </div>
         `;
         pipResultDivRef.current.style.display = 'block';
@@ -172,7 +215,27 @@ export default function Translation() {
                   placeholder="Type or paste text here..."
                 ></textarea>
               </div>
-              <button id="pipTranslateButton" class="px-4 py-2 bg-primary text-primary-foreground rounded-md">Translate</button>
+
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <label class="text-sm font-medium">Source Language:</label>
+                </div>
+                <select id="pipSourceLanguage" class="w-full p-2 border rounded-md">
+                  <option value="">Auto detect</option>
+                  ${languages.map(lang => `<option value="${lang.code}" ${lang.code === sourceLanguage ? 'selected' : ''}>${lang.name}</option>`).join('')}
+                </select>
+              </div>
+
+              <div class="space-y-2">
+                <label class="text-sm font-medium">Target Language:</label>
+                <select id="pipTargetLanguage" class="w-full p-2 border rounded-md">
+                  ${languages.map(lang => `<option value="${lang.code}" ${lang.code === targetLanguage ? 'selected' : ''}>${lang.name}</option>`).join('')}
+                </select>
+              </div>
+
+              <div class="flex space-x-2">
+                <button id="pipTranslateButton" class="w-full px-4 py-2 bg-primary text-primary-foreground rounded-md">Translate</button>
+              </div>
             </div>
           `;
 
@@ -195,25 +258,38 @@ export default function Translation() {
           // Add the content to the PiP window
           pipWindow.document.body.appendChild(pipContent);
 
-          // Get reference to the textarea and translate button
+          // Get references to the PiP window elements
           pipTextareaRef.current = pipWindow.document.getElementById('pipTextarea') as HTMLTextAreaElement;
           const pipTranslateButton = pipWindow.document.getElementById('pipTranslateButton');
+          const pipSourceLanguageSelect = pipWindow.document.getElementById('pipSourceLanguage') as HTMLSelectElement;
+          const pipTargetLanguageSelect = pipWindow.document.getElementById('pipTargetLanguage') as HTMLSelectElement;
+
 
           // Add event listener to the translate button
-          if (pipTranslateButton && pipTextareaRef.current) {
+          if (pipTranslateButton && pipTextareaRef.current && pipTargetLanguageSelect && pipSourceLanguageSelect) {
             pipTranslateButton.addEventListener('click', () => {
               if (pipTextareaRef.current) {
-                handlePipTranslate(pipTextareaRef.current.value);
+                const selectedTargetLanguage = pipTargetLanguageSelect.value;
+                const selectedSourceLanguage = pipSourceLanguageSelect.value || null;
+                handlePipTranslate(
+                  pipTextareaRef.current.value, 
+                  selectedTargetLanguage, 
+                  selectedSourceLanguage === '' ? null : selectedSourceLanguage
+                );
               }
             });
           }
 
           // If there's a translation result, show it in the PiP window
           if (translationResult) {
+            // Find language names
+            const detectedLangName = languages.find(lang => lang.code === translationResult.detectedLanguage)?.name || translationResult.detectedLanguage;
+            const targetLangName = languages.find(lang => lang.code === targetLanguage)?.name || targetLanguage;
+
             resultDiv.innerHTML = `
               <div style="width: 100%; box-sizing: border-box; overflow-wrap: break-word;">
                 <span class="text-sm text-muted-foreground">
-                  Detected language: <strong>${translationResult.detectedLanguage}</strong>
+                  Detected language: <strong>${detectedLangName}</strong>
                 </span>
               </div>
               <div class="space-y-2" style="width: 100%; box-sizing: border-box;">
@@ -223,13 +299,13 @@ export default function Translation() {
                 </div>
               </div>
               <div class="space-y-2" style="width: 100%; box-sizing: border-box;">
-                <h3 class="font-semibold">Translation:</h3>
+                <h3 class="font-semibold">Translation (${targetLangName}):</h3>
                 <div class="p-3 bg-muted rounded-md" style="word-break: break-word; overflow-wrap: break-word; white-space: normal; max-width: 100%; box-sizing: border-box;">
                   ${translationResult.translatedText}
                 </div>
               </div>
               <div class="text-xs text-muted-foreground mt-2" style="width: 100%; box-sizing: border-box; overflow-wrap: break-word;">
-                Note: This is using a mock translation function.
+                Powered by Google Translate API
               </div>
             `;
             resultDiv.style.display = 'block';
@@ -309,22 +385,24 @@ export default function Translation() {
     }
   };
 
+
   const handleTranslate = async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim()) {
+      setError('Please enter text to translate.');
+      return;
+    }
 
     setIsTranslating(true);
     setError(null);
 
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      const { translatedText, detectedLanguage } = mockTranslate(inputText);
+      // Call Google Translate API with the selected target language and source language (if specified)
+      const { translatedText, detectedLanguage: resultDetectedLanguage } = await translateWithGoogleAPI(inputText, targetLanguage, sourceLanguage);
 
       const result: TranslationResult = {
         originalText: inputText,
         translatedText,
-        detectedLanguage,
+        detectedLanguage: resultDetectedLanguage,
         timestamp: new Date()
       };
 
@@ -353,9 +431,11 @@ export default function Translation() {
       }
 
       setTranslationResult(savedTranslation);
-    } catch (err) {
-      console.error('Error saving translation:', err);
-      setError('Failed to save translation. Please try again later.');
+      // Success message (would use toast if implemented)
+      console.log('Translation Successful: The text has been translated.');
+    } catch (err: any) {
+      console.error('Translation error:', err);
+      setError(err.message || 'Failed to translate text. Please try again later.');
     } finally {
       setIsTranslating(false);
     }
@@ -389,12 +469,74 @@ export default function Translation() {
             />
           </div>
 
-          <Button
-            onClick={handleTranslate}
-            disabled={!inputText.trim() || isTranslating}
-          >
-            {isTranslating ? 'Translating...' : 'Translate'}
-          </Button>
+          <div className="flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4">
+            <div className="w-full sm:w-1/2">
+              <div className="flex items-center justify-between mb-1">
+                <Label htmlFor="sourceLanguage">Source Language:</Label>
+              </div>
+              <Select
+                value={sourceLanguage || 'auto-detect'}
+                onValueChange={(value) => {
+                  setSourceLanguage(value === 'auto-detect' ? null : value);
+                  // Clear detected language when source language is manually selected
+                  if (value !== 'auto-detect') {
+                    setDetectedLanguage(null);
+                  }
+                }}
+              >
+                <SelectTrigger id="sourceLanguage">
+                  <SelectValue placeholder="Auto detect" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto-detect">Auto detect</SelectItem>
+                  {languages.map((lang) => (
+                    <SelectItem key={lang.code} value={lang.code}>
+                      {lang.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="w-full sm:w-1/2">
+              <Label htmlFor="targetLanguage" className="mb-1 block">Target Language:</Label>
+              <Select
+                value={targetLanguage}
+                onValueChange={setTargetLanguage}
+              >
+                <SelectTrigger id="targetLanguage">
+                  <SelectValue placeholder="Select language" />
+                </SelectTrigger>
+                <SelectContent>
+                  {languages.map((lang) => (
+                    <SelectItem key={lang.code} value={lang.code}>
+                      {lang.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Show detected language if auto-detect was used */}
+          {detectedLanguage && !sourceLanguage ? (
+            <div className="mt-2">
+              <Label>Detected Language:</Label>
+              <div className="p-2 bg-muted rounded-md mt-1">
+                {languages.find(lang => lang.code === detectedLanguage)?.name || detectedLanguage}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="flex space-x-2">
+            <Button
+              onClick={handleTranslate}
+              disabled={!inputText.trim() || isTranslating}
+              className="w-full"
+            >
+              {isTranslating ? 'Translating...' : 'Translate'}
+            </Button>
+          </div>
 
           {error && (
             <div className="text-sm text-destructive mt-2">
@@ -409,7 +551,7 @@ export default function Translation() {
           <div className="space-y-4">
             <div>
               <span className="text-sm text-muted-foreground">
-                Detected language: <strong>{translationResult.detectedLanguage}</strong>
+                Detected language: <strong>{languages.find(lang => lang.code === translationResult.detectedLanguage)?.name || translationResult.detectedLanguage}</strong>
               </span>
             </div>
 
@@ -421,14 +563,16 @@ export default function Translation() {
             </div>
 
             <div className="space-y-2">
-              <h3 className="font-semibold">Translation:</h3>
+              <h3 className="font-semibold">
+                Translation ({languages.find(lang => lang.code === targetLanguage)?.name || targetLanguage}):
+              </h3>
               <div className="p-3 bg-muted rounded-md">
                 {translationResult.translatedText}
               </div>
             </div>
 
             <div className="text-xs text-muted-foreground">
-              Note: This is using a mock translation function. In a real application, this would be connected to a translation API.
+              Powered by Google Translate API
             </div>
           </div>
         </CardContent>
