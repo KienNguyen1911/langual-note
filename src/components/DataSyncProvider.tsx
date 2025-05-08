@@ -13,9 +13,12 @@ export default function DataSyncProvider({ children }: { children: React.ReactNo
     if (status === 'authenticated' && session?.user?.id && !hasSynced) {
       const syncData = async () => {
         try {
-          await syncLocalDataWithUser(session.user.id);
-          setHasSynced(true);
-          console.log('Successfully synced local data with user account');
+          // Add null check to satisfy TypeScript
+          if (session?.user?.id) {
+            await syncLocalDataWithUser(session.user.id);
+            setHasSynced(true);
+            console.log('Successfully synced local data with user account');
+          }
         } catch (error) {
           console.error('Error syncing data:', error);
         }

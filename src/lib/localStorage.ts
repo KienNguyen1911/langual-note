@@ -6,9 +6,14 @@ const TRANSLATION_HISTORY_KEY = 'translation_history';
 const VOCABULARY_NOTES_KEY = 'vocabulary_notes';
 
 // Type for items stored in localStorage
-type LocalStorageTranslation = Omit<ITranslationHistory, '_id' | 'userId'> & { 
+type LocalStorageTranslation = {
+  originalText: string;
+  translatedText: string;
+  detectedLanguage: string;
+  timestamp: Date | number;
   _id?: string;
   localId: string;
+  [key: string]: any;
 };
 
 type LocalStorageVocabulary = Omit<IVocabularyNote, '_id' | 'userId'> & {
@@ -24,10 +29,10 @@ const generateLocalId = (): string => {
 // Translation History Functions
 export const getLocalTranslations = (): LocalStorageTranslation[] => {
   if (typeof window === 'undefined') return [];
-  
+
   const stored = localStorage.getItem(TRANSLATION_HISTORY_KEY);
   if (!stored) return [];
-  
+
   try {
     return JSON.parse(stored);
   } catch (error) {
@@ -36,28 +41,34 @@ export const getLocalTranslations = (): LocalStorageTranslation[] => {
   }
 };
 
-export const saveLocalTranslation = (translation: Omit<ITranslationHistory, '_id' | 'userId'>): LocalStorageTranslation => {
+export const saveLocalTranslation = (translation: { 
+  originalText: string;
+  translatedText: string;
+  detectedLanguage: string;
+  timestamp: Date | number;
+  [key: string]: any;
+}): LocalStorageTranslation => {
   const localTranslations = getLocalTranslations();
-  
+
   const newTranslation: LocalStorageTranslation = {
     ...translation,
     localId: generateLocalId()
   };
-  
+
   localTranslations.unshift(newTranslation);
   localStorage.setItem(TRANSLATION_HISTORY_KEY, JSON.stringify(localTranslations));
-  
+
   return newTranslation;
 };
 
 export const deleteLocalTranslation = (localId: string): boolean => {
   const localTranslations = getLocalTranslations();
   const filteredTranslations = localTranslations.filter(t => t.localId !== localId);
-  
+
   if (filteredTranslations.length === localTranslations.length) {
     return false; // Nothing was deleted
   }
-  
+
   localStorage.setItem(TRANSLATION_HISTORY_KEY, JSON.stringify(filteredTranslations));
   return true;
 };
@@ -69,10 +80,10 @@ export const clearLocalTranslations = (): void => {
 // Vocabulary Note Functions
 export const getLocalVocabularyNotes = (): LocalStorageVocabulary[] => {
   if (typeof window === 'undefined') return [];
-  
+
   const stored = localStorage.getItem(VOCABULARY_NOTES_KEY);
   if (!stored) return [];
-  
+
   try {
     return JSON.parse(stored);
   } catch (error) {
@@ -83,26 +94,26 @@ export const getLocalVocabularyNotes = (): LocalStorageVocabulary[] => {
 
 export const saveLocalVocabularyNote = (note: Omit<IVocabularyNote, '_id' | 'userId'>): LocalStorageVocabulary => {
   const localNotes = getLocalVocabularyNotes();
-  
+
   const newNote: LocalStorageVocabulary = {
     ...note,
     localId: generateLocalId()
   };
-  
+
   localNotes.unshift(newNote);
   localStorage.setItem(VOCABULARY_NOTES_KEY, JSON.stringify(localNotes));
-  
+
   return newNote;
 };
 
 export const deleteLocalVocabularyNote = (localId: string): boolean => {
   const localNotes = getLocalVocabularyNotes();
   const filteredNotes = localNotes.filter(n => n.localId !== localId);
-  
+
   if (filteredNotes.length === localNotes.length) {
     return false; // Nothing was deleted
   }
-  
+
   localStorage.setItem(VOCABULARY_NOTES_KEY, JSON.stringify(filteredNotes));
   return true;
 };
@@ -131,14 +142,14 @@ export const syncLocalDataWithUser = async (userId: string): Promise<void> => {
           }),
         });
       }
-      
+
       // Clear local translations after successful sync
       clearLocalTranslations();
     } catch (error) {
       console.error('Error syncing translations:', error);
     }
   }
-  
+
   // Sync vocabulary notes
   const localNotes = getLocalVocabularyNotes();
   if (localNotes.length > 0) {
@@ -157,7 +168,7 @@ export const syncLocalDataWithUser = async (userId: string): Promise<void> => {
           }),
         });
       }
-      
+
       // Clear local notes after successful sync
       clearLocalVocabularyNotes();
     } catch (error) {

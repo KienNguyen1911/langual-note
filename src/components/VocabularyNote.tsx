@@ -307,7 +307,7 @@ export default function VocabularyNote() {
                   <div className="flex justify-between items-center mb-2">
                     <h4 className="font-bold">{note.word}</h4>
                     <Button
-                      onClick={() => handleDelete(note._id)}
+                      onClick={() => note._id && handleDelete(note._id)}
                       variant="ghost"
                       size="sm"
                       className="text-destructive hover:text-destructive/90"

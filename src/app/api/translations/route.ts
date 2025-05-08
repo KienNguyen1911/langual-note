@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb/connection';
 import TranslationHistory, { ITranslationHistory } from '@/lib/mongodb/models/TranslationHistory';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { auth } from '@/lib/auth';
 
 // GET all translation history
 export async function GET(request: NextRequest) {

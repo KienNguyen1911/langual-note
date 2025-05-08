@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb/connection';
 import VocabularyNote, { IVocabularyNote } from '@/lib/mongodb/models/VocabularyNote';
-import { auth } from '@/app/api/auth/[...nextauth]/route';
+import { auth } from '@/lib/auth';
 
 // GET all vocabulary notes
 export async function GET(request: NextRequest) {
