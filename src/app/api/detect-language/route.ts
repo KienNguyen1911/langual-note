@@ -13,9 +13,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Use the detect-language prompt to detect the language
-    const detectedLanguage = await ai.run('detect-language', {
-      text,
-    });
+    const detectLanguagePrompt = (await import('@/prompts/detect-language.prompt')).default;
+    const detectedLanguage = await detectLanguagePrompt({ text });
 
     return NextResponse.json({
       detectedLanguage: detectedLanguage.trim()

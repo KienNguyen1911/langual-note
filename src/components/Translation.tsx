@@ -63,7 +63,7 @@ export default function Translation() {
   const [isPipSupported, setIsPipSupported] = useState(false);
   const [isPipActive, setIsPipActive] = useState(false);
   const [targetLanguage, setTargetLanguage] = useState('en');
-  const [sourceLanguage, setSourceLanguage] = useState<string | null>(null);
+  const [sourceLanguage, setSourceLanguage] = useState<string | undefined>(undefined);
   const [detectedLanguage, setDetectedLanguage] = useState<string | null>(null);
   const translationCardRef = useRef<HTMLDivElement>(null);
   const pipWindowRef = useRef<Window | null>(null);
@@ -270,11 +270,11 @@ export default function Translation() {
             pipTranslateButton.addEventListener('click', () => {
               if (pipTextareaRef.current) {
                 const selectedTargetLanguage = pipTargetLanguageSelect.value;
-                const selectedSourceLanguage = pipSourceLanguageSelect.value || null;
+                const selectedSourceLanguage = pipSourceLanguageSelect.value || undefined;
                 handlePipTranslate(
                   pipTextareaRef.current.value, 
                   selectedTargetLanguage, 
-                  selectedSourceLanguage === '' ? null : selectedSourceLanguage
+                  selectedSourceLanguage === '' ? undefined : selectedSourceLanguage
                 );
               }
             });
@@ -477,7 +477,7 @@ export default function Translation() {
               <Select
                 value={sourceLanguage || 'auto-detect'}
                 onValueChange={(value) => {
-                  setSourceLanguage(value === 'auto-detect' ? null : value);
+                  setSourceLanguage(value === 'auto-detect' ? undefined : value);
                   // Clear detected language when source language is manually selected
                   if (value !== 'auto-detect') {
                     setDetectedLanguage(null);

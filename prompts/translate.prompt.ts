@@ -1,33 +1,21 @@
-import { definePrompt } from 'genkit';
+import { ai } from '@/app/ai-service/ai-instance';
+import { z } from 'genkit';
 
-export default definePrompt({
+export default ai.definePrompt({
   name: 'translate',
-  description: 'Translates text from one language to another',
-  parameters: {
-    text: {
-      type: 'string',
-      description: 'The text to translate',
-    },
-    sourceLanguage: {
-      type: 'string',
-      description: 'The source language code (optional, will be detected if not provided)',
-      optional: true,
-    },
-    targetLanguage: {
-      type: 'string',
-      description: 'The target language code',
-      defaultValue: 'en',
-    },
+  input: {
+    schema: z.object({
+      text: z.string().describe('The text to translate'),
+      sourceLanguage: z.string().optional().describe('The source language code (optional, will be detected if not provided)'),
+      targetLanguage: z.string().default('en').describe('The target language code'),
+    }),
   },
-  prompt: ({ text, sourceLanguage, targetLanguage }) => {
-    if (sourceLanguage) {
-      return `Translate the following text from ${sourceLanguage} to ${targetLanguage}. Only respond with the translation, no additional text:
-      
-      "${text}"`;
-    } else {
-      return `Translate the following text to ${targetLanguage}. Only respond with the translation, no additional text:
-      
-      "${text}"`;
-    }
+  output: {
+    schema: z.string().describe('The translated text'),
   },
+  prompt: `{{#if sourceLanguage}}Translate the following text from {{{sourceLanguage}}} to {{{targetLanguage}}}. Only respond with the translation, no additional text:
+
+      "{{{text}}}"{{else}}Translate the following text to {{{targetLanguage}}}. Only respond with the translation, no additional text:
+
+      "{{{text}}}"{{/if}}`,
 });
