@@ -5,7 +5,277 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent as DefaultSelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import ReactDOM from 'react-dom/client';
+import { createPortal } from 'react-dom';
+import React from 'react';
+import * as SelectPrimitive from "@radix-ui/react-select";
+import { cn } from "@/lib/utils";
+import { ChevronDown, ChevronUp } from "lucide-react";
+
+// Custom SelectContent for PiP window that uses PiP window's document
+const createPipSelectContent = (pipWindow: Window) => {
+  // Create custom scroll buttons that match the original ones
+  const PipSelectScrollUpButton = React.forwardRef<
+    React.ElementRef<typeof SelectPrimitive.ScrollUpButton>,
+    React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollUpButton>
+  >(({ className, ...props }, ref) => (
+    <SelectPrimitive.ScrollUpButton
+      ref={ref}
+      className={cn(
+        "flex cursor-default items-center justify-center py-1",
+        className
+      )}
+      {...props}
+    >
+      <ChevronUp className="h-4 w-4" />
+    </SelectPrimitive.ScrollUpButton>
+  ));
+
+  const PipSelectScrollDownButton = React.forwardRef<
+    React.ElementRef<typeof SelectPrimitive.ScrollDownButton>,
+    React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollDownButton>
+  >(({ className, ...props }, ref) => (
+    <SelectPrimitive.ScrollDownButton
+      ref={ref}
+      className={cn(
+        "flex cursor-default items-center justify-center py-1",
+        className
+      )}
+      {...props}
+    >
+      <ChevronDown className="h-4 w-4" />
+    </SelectPrimitive.ScrollDownButton>
+  ));
+
+  // Create custom SelectContent that uses PiP window's document
+  const PipSelectContent = React.forwardRef<
+    React.ElementRef<typeof SelectPrimitive.Content>,
+    React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
+  >(({ className, children, position = "popper", ...props }, ref) => {
+    // Create a custom portal that renders into the PiP window's document
+    const PipPortal = ({ children }: { children: React.ReactNode }) => {
+      return createPortal(
+        children,
+        pipWindow.document.body
+      );
+    };
+
+    return (
+      <PipPortal>
+        <SelectPrimitive.Content
+          ref={ref}
+          className={cn(
+            "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+            position === "popper" &&
+              "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
+            className
+          )}
+          position={position}
+          {...props}
+        >
+          <PipSelectScrollUpButton />
+          <SelectPrimitive.Viewport
+            className={cn(
+              "p-1",
+              position === "popper" &&
+                "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]"
+            )}
+          >
+            {children}
+          </SelectPrimitive.Viewport>
+          <PipSelectScrollDownButton />
+        </SelectPrimitive.Content>
+      </PipPortal>
+    );
+  });
+
+  return PipSelectContent;
+};
+
+// Function to render shadcn UI components in PiP window
+function renderShadcnInPip(
+  pipWindow: Window, 
+  translationResult: TranslationResult | null, 
+  targetLanguage: string, 
+  sourceLanguage: string | undefined,
+  languages: { code: string; name: string }[],
+  onTranslate: (text: string, targetLang: string, sourceLang?: string) => Promise<void>,
+  onTranslationResultChange: (result: TranslationResult | null) => void
+) {
+  // 1. Create root div in PiP window
+  const pipRootDiv = pipWindow.document.createElement('div');
+  pipRootDiv.id = 'react-pip-root';
+  pipWindow.document.body.appendChild(pipRootDiv);
+
+  // 2. Create React root and render component
+  const root = ReactDOM.createRoot(pipRootDiv);
+
+  // Create a custom SelectContent component for the PiP window
+  const PipSelectContent = createPipSelectContent(pipWindow);
+
+  // Create a PiP component that will be rendered in the PiP window
+  const PipComponent = () => {
+    // State for the PiP window
+    const [inputText, setInputText] = React.useState(translationResult?.originalText || '');
+    const [selectedTargetLang, setSelectedTargetLang] = React.useState(targetLanguage);
+    const [selectedSourceLang, setSelectedSourceLang] = React.useState(sourceLanguage || 'auto-detect');
+    const [isTranslating, setIsTranslating] = React.useState(false);
+    const [pipTranslationResult, setPipTranslationResult] = React.useState(translationResult);
+
+    // Find language names for display
+    const detectedLangName = pipTranslationResult 
+      ? (languages.find(lang => lang.code === pipTranslationResult.detectedLanguage)?.name || pipTranslationResult.detectedLanguage)
+      : '';
+    const targetLangName = languages.find(lang => lang.code === selectedTargetLang)?.name || selectedTargetLang;
+
+    // Handle translation in the PiP window
+    const handlePipTranslate = async () => {
+      if (!inputText.trim()) return;
+
+      setIsTranslating(true);
+      try {
+        await onTranslate(
+          inputText, 
+          selectedTargetLang, 
+          selectedSourceLang === 'auto-detect' ? undefined : selectedSourceLang
+        );
+        // The parent component will update translationResult, which will be passed to this component
+        // on the next render. We don't need to update pipTranslationResult here.
+      } catch (error) {
+        console.error('Error translating in PiP:', error);
+      } finally {
+        setIsTranslating(false);
+      }
+    };
+
+    // Update local state when props change
+    React.useEffect(() => {
+      setPipTranslationResult(translationResult);
+    }, [translationResult]);
+
+    // Register a callback to update the translation result from the parent component
+    React.useEffect(() => {
+      // Store the callback in the ref provided by the parent component
+      onTranslationResultChange((result) => {
+        setPipTranslationResult(result);
+      });
+    }, []);
+
+    return (
+      <div className="p-4 bg-background text-foreground">
+        <Card className="w-full">
+          <CardHeader>
+            <CardTitle>🌍 Translation</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex flex-row space-x-4 sm:space-y-0 sm:space-x-4">
+                <div className="w-1/2">
+                  <Label htmlFor="pipSourceLanguage" className="mb-1 block">Source Language:</Label>
+                  <Select
+                    value={selectedSourceLang}
+                    onValueChange={setSelectedSourceLang}
+                  >
+                    <SelectTrigger id="pipSourceLanguage">
+                      <SelectValue placeholder="Auto detect" />
+                    </SelectTrigger>
+                    <PipSelectContent>
+                      <SelectItem value="auto-detect">Auto detect</SelectItem>
+                      {languages.map((lang) => (
+                        <SelectItem key={lang.code} value={lang.code}>
+                          {lang.name}
+                        </SelectItem>
+                      ))}
+                    </PipSelectContent>
+                  </Select>
+                </div>
+
+                <div className="w-1/2">
+                  <Label htmlFor="pipTargetLanguage" className="mb-1 block">Target Language:</Label>
+                  <Select
+                    value={selectedTargetLang}
+                    onValueChange={setSelectedTargetLang}
+                  >
+                    <SelectTrigger id="pipTargetLanguage">
+                      <SelectValue placeholder="Select language" />
+                    </SelectTrigger>
+                    <PipSelectContent>
+                      {languages.map((lang) => (
+                        <SelectItem key={lang.code} value={lang.code}>
+                          {lang.name}
+                        </SelectItem>
+                      ))}
+                    </PipSelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Textarea
+                  id="pipInputText"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  rows={4}
+                  placeholder="Enter text to translate..."
+                />
+              </div>
+
+              <Button
+                onClick={handlePipTranslate}
+                disabled={!inputText.trim() || isTranslating}
+                className="w-full"
+              >
+                {isTranslating ? 'Translating...' : 'Translate'}
+              </Button>
+
+              {pipTranslationResult && (
+                <div className="space-y-4 mt-4 pt-4 border-t">
+                  <div>
+                    <span className="text-sm text-muted-foreground">
+                      {selectedSourceLang && selectedSourceLang !== 'auto-detect' ? 'Source language: ' : 'Detected language: '}
+                      <strong>
+                        {selectedSourceLang && selectedSourceLang !== 'auto-detect'
+                          ? languages.find(lang => lang.code === selectedSourceLang)?.name || selectedSourceLang
+                          : detectedLangName}
+                      </strong>
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="font-semibold">Original Text:</h3>
+                    <div className="p-3 bg-muted rounded-md">
+                      {pipTranslationResult.originalText}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="font-semibold">
+                      Translation ({targetLangName}):
+                    </h3>
+                    <div className="p-3 bg-muted rounded-md">
+                      {pipTranslationResult.translatedText}
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Powered by Google Translate API
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
+  // Render the PiP component
+  root.render(
+    <React.StrictMode>
+      <PipComponent />
+    </React.StrictMode>
+  );
+
+  return root;
+}
 
 interface TranslationResult {
   _id?: string;
@@ -69,6 +339,9 @@ export default function Translation() {
   const pipWindowRef = useRef<Window | null>(null);
   const pipTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const pipResultDivRef = useRef<HTMLDivElement | null>(null);
+  const pipReactRootRef = useRef<any>(null);
+  // Function to update translation result in PiP window
+  const onTranslationResultChangeRef = useRef<(result: TranslationResult | null) => void>(() => {});
 
   useEffect(() => {
     // Check if Document Picture-in-Picture API is supported
@@ -110,7 +383,7 @@ export default function Translation() {
         }
 
         savedTranslation = await response.json();
-      } 
+      }
       // If user is not authenticated, save to localStorage
       else {
         savedTranslation = saveLocalTranslation(result);
@@ -119,8 +392,13 @@ export default function Translation() {
       // Update the main component's state
       setTranslationResult(savedTranslation);
 
-      // Update the PiP window with the translation result
-      if (pipResultDivRef.current && pipWindowRef.current) {
+      // If we're using the React-based PiP window, update it through the callback
+      if (pipReactRootRef.current && onTranslationResultChangeRef.current) {
+        // This will update the translation result in the PiP window
+        onTranslationResultChangeRef.current(savedTranslation);
+      }
+      // For backwards compatibility with the old HTML-based PiP window
+      else if (pipResultDivRef.current && pipWindowRef.current) {
         // Find language names
         const detectedLangName = languages.find(lang => lang.code === savedTranslation.detectedLanguage)?.name || savedTranslation.detectedLanguage;
         const targetLangName = languages.find(lang => lang.code === targetLanguage)?.name || targetLanguage;
@@ -181,6 +459,13 @@ export default function Translation() {
         // Exit PiP mode
         if (document.exitPictureInPicture) {
           await document.exitPictureInPicture();
+
+          // Clean up React root if it exists
+          if (pipReactRootRef.current) {
+            pipReactRootRef.current.unmount();
+            pipReactRootRef.current = null;
+          }
+
           setIsPipActive(false);
           pipWindowRef.current = null;
           pipTextareaRef.current = null;
@@ -196,189 +481,73 @@ export default function Translation() {
         // Store reference to the PiP window
         pipWindowRef.current = pipWindow;
 
-        // Clone the translation card content for PiP window
-        if (translationCardRef.current) {
-          const pipContent = document.createElement('div');
-          pipContent.className = 'p-4 bg-background text-foreground';
-          pipContent.style.width = '100%';
-          pipContent.style.boxSizing = 'border-box';
-          pipContent.style.overflowX = 'hidden';
-          pipContent.innerHTML = `
-            <h2 class="text-xl font-bold mb-4">🌍 Translation</h2>
-            <div class="space-y-4">
-              <div class="space-y-2">
-                <label class="text-sm font-medium">Enter text to translate:</label>
-                <textarea 
-                  id="pipTextarea"
-                  class="w-full min-h-[100px] p-2 border rounded-md" 
-                  style="max-width: 100%; box-sizing: border-box; overflow-wrap: break-word;"
-                  placeholder="Type or paste text here..."
-                ></textarea>
-              </div>
+        // Import styles from the main window to the PiP window
+        const importGlobalCSS = () => {
+          try {
+            // Copy all stylesheets from the main window to the PiP window
+            Array.from(document.styleSheets).forEach(styleSheet => {
+              try {
+                // Skip if the stylesheet is from a different origin (CORS restriction)
+                if (styleSheet.href && new URL(styleSheet.href).origin !== window.location.origin) {
+                  return;
+                }
 
-              <div class="space-y-2">
-                <div class="flex items-center justify-between">
-                  <label class="text-sm font-medium">Source Language:</label>
-                </div>
-                <select id="pipSourceLanguage" class="w-full p-2 border rounded-md">
-                  <option value="">Auto detect</option>
-                  ${languages.map(lang => `<option value="${lang.code}" ${lang.code === sourceLanguage ? 'selected' : ''}>${lang.name}</option>`).join('')}
-                </select>
-              </div>
-
-              <div class="space-y-2">
-                <label class="text-sm font-medium">Target Language:</label>
-                <select id="pipTargetLanguage" class="w-full p-2 border rounded-md">
-                  ${languages.map(lang => `<option value="${lang.code}" ${lang.code === targetLanguage ? 'selected' : ''}>${lang.name}</option>`).join('')}
-                </select>
-              </div>
-
-              <div class="flex space-x-2">
-                <button id="pipTranslateButton" class="w-full px-4 py-2 bg-primary text-primary-foreground rounded-md">Translate</button>
-              </div>
-            </div>
-          `;
-
-          // Create a div for translation results
-          const resultDiv = document.createElement('div');
-          resultDiv.id = 'pipResultDiv';
-          resultDiv.className = 'mt-4 space-y-4 border-t pt-4';
-          resultDiv.style.display = 'none';
-          resultDiv.style.width = '100%';
-          resultDiv.style.maxWidth = '100%';
-          resultDiv.style.boxSizing = 'border-box';
-          resultDiv.style.overflowX = 'hidden';
-          resultDiv.style.wordBreak = 'break-word';
-          resultDiv.style.overflowWrap = 'break-word';
-          pipContent.appendChild(resultDiv);
-
-          // Store reference to the result div
-          pipResultDivRef.current = resultDiv;
-
-          // Add the content to the PiP window
-          pipWindow.document.body.appendChild(pipContent);
-
-          // Get references to the PiP window elements
-          pipTextareaRef.current = pipWindow.document.getElementById('pipTextarea') as HTMLTextAreaElement;
-          const pipTranslateButton = pipWindow.document.getElementById('pipTranslateButton');
-          const pipSourceLanguageSelect = pipWindow.document.getElementById('pipSourceLanguage') as HTMLSelectElement;
-          const pipTargetLanguageSelect = pipWindow.document.getElementById('pipTargetLanguage') as HTMLSelectElement;
-
-
-          // Add event listener to the translate button
-          if (pipTranslateButton && pipTextareaRef.current && pipTargetLanguageSelect && pipSourceLanguageSelect) {
-            pipTranslateButton.addEventListener('click', () => {
-              if (pipTextareaRef.current) {
-                const selectedTargetLanguage = pipTargetLanguageSelect.value;
-                const selectedSourceLanguage = pipSourceLanguageSelect.value || undefined;
-                handlePipTranslate(
-                  pipTextareaRef.current.value, 
-                  selectedTargetLanguage, 
-                  selectedSourceLanguage === '' ? undefined : selectedSourceLanguage
-                );
+                const rules = Array.from(styleSheet.cssRules || []);
+                if (rules.length > 0) {
+                  const style = document.createElement('style');
+                  rules.forEach(rule => {
+                    style.appendChild(document.createTextNode(rule.cssText));
+                  });
+                  pipWindow.document.head.appendChild(style);
+                }
+              } catch (e) {
+                // CORS errors when accessing cssRules are expected for external stylesheets
+                console.log('Could not access rules from stylesheet:', e);
               }
             });
+
+            // Add a class to the document to enable dark mode if needed
+            if (document.documentElement.classList.contains('dark')) {
+              pipWindow.document.documentElement.classList.add('dark');
+            }
+          } catch (error) {
+            console.error('Error importing styles:', error);
+          }
+        };
+
+        // Import and apply globals.css
+        importGlobalCSS();
+
+        // Use the new renderShadcnInPip function to render React components in the PiP window
+        const reactRoot = renderShadcnInPip(
+          pipWindow,
+          translationResult,
+          targetLanguage,
+          sourceLanguage,
+          languages,
+          handlePipTranslate,
+          (callback) => {
+            // Store the callback in the ref so it can be called from handlePipTranslate
+            onTranslationResultChangeRef.current = callback;
+          }
+        );
+        pipReactRootRef.current = reactRoot;
+
+        // Set up event listener for when PiP window closes
+        pipWindow.addEventListener('pagehide', () => {
+          // Clean up React root
+          if (pipReactRootRef.current) {
+            pipReactRootRef.current.unmount();
+            pipReactRootRef.current = null;
           }
 
-          // If there's a translation result, show it in the PiP window
-          if (translationResult) {
-            // Find language names
-            const detectedLangName = languages.find(lang => lang.code === translationResult.detectedLanguage)?.name || translationResult.detectedLanguage;
-            const targetLangName = languages.find(lang => lang.code === targetLanguage)?.name || targetLanguage;
+          setIsPipActive(false);
+          pipWindowRef.current = null;
+          pipTextareaRef.current = null;
+          pipResultDivRef.current = null;
+        });
 
-            resultDiv.innerHTML = `
-              <div style="width: 100%; box-sizing: border-box; overflow-wrap: break-word;">
-                <span class="text-sm text-muted-foreground">
-                  Detected language: <strong>${detectedLangName}</strong>
-                </span>
-              </div>
-              <div class="space-y-2" style="width: 100%; box-sizing: border-box;">
-                <h3 class="font-semibold">Original Text:</h3>
-                <div class="p-3 bg-muted rounded-md" style="word-break: break-word; overflow-wrap: break-word; white-space: normal; max-width: 100%; box-sizing: border-box;">
-                  ${translationResult.originalText}
-                </div>
-              </div>
-              <div class="space-y-2" style="width: 100%; box-sizing: border-box;">
-                <h3 class="font-semibold">Translation (${targetLangName}):</h3>
-                <div class="p-3 bg-muted rounded-md" style="word-break: break-word; overflow-wrap: break-word; white-space: normal; max-width: 100%; box-sizing: border-box;">
-                  ${translationResult.translatedText}
-                </div>
-              </div>
-              <div class="text-xs text-muted-foreground mt-2" style="width: 100%; box-sizing: border-box; overflow-wrap: break-word;">
-                Powered by Google Translate API
-              </div>
-            `;
-            resultDiv.style.display = 'block';
-
-            // Pre-fill the textarea with the previous input
-            if (pipTextareaRef.current) {
-              pipTextareaRef.current.value = translationResult.originalText;
-            }
-          }
-
-          // Add styles to the PiP window
-          const styleElement = document.createElement('style');
-          styleElement.textContent = `
-            body {
-              margin: 0;
-              font-family: system-ui, sans-serif;
-              background-color: white;
-              color: black;
-              overflow-x: hidden;
-              max-width: 100%;
-              box-sizing: border-box;
-            }
-            .bg-background { background-color: white; }
-            .text-foreground { color: black; }
-            .bg-primary { background-color: #0070f3; }
-            .text-primary-foreground { color: white; }
-            .bg-muted { background-color: #f5f5f5; }
-            .text-muted-foreground { color: #666; }
-            .text-red-500 { color: #ef4444; }
-            .border { border: 1px solid #e5e5e5; }
-            .rounded-md { border-radius: 0.375rem; }
-            .p-3.bg-muted.rounded-md { 
-              word-break: break-word; 
-              overflow-wrap: break-word; 
-              white-space: normal;
-              max-width: 100%;
-              box-sizing: border-box;
-            }
-            .space-y-2 > * + * { margin-top: 0.5rem; }
-            .space-y-4 > * + * { margin-top: 1rem; }
-            .p-2 { padding: 0.5rem; }
-            .p-3 { padding: 0.75rem; }
-            .p-4 { padding: 1rem; }
-            .px-4 { padding-left: 1rem; padding-right: 1rem; }
-            .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-            .mt-2 { margin-top: 0.5rem; }
-            .mt-4 { margin-top: 1rem; }
-            .mb-4 { margin-bottom: 1rem; }
-            .pt-4 { padding-top: 1rem; }
-            .border-t { border-top: 1px solid #e5e5e5; }
-            .min-h-\\[100px\\] { min-height: 100px; }
-            .w-full { width: 100%; }
-            .text-sm { font-size: 0.875rem; }
-            .text-xs { font-size: 0.75rem; }
-            .text-xl { font-size: 1.25rem; }
-            .font-medium { font-weight: 500; }
-            .font-semibold { font-weight: 600; }
-            .font-bold { font-weight: 700; }
-            button:hover { opacity: 0.9; }
-            button:active { opacity: 0.8; }
-          `;
-          pipWindow.document.head.appendChild(styleElement);
-
-          // Set up event listener for when PiP window closes
-          pipWindow.addEventListener('pagehide', () => {
-            setIsPipActive(false);
-            pipWindowRef.current = null;
-            pipTextareaRef.current = null;
-            pipResultDivRef.current = null;
-          });
-
-          setIsPipActive(true);
-        }
+        setIsPipActive(true);
       }
     } catch (error) {
       console.error('Failed to toggle Picture-in-Picture mode:', error);
@@ -424,7 +593,7 @@ export default function Translation() {
         }
 
         savedTranslation = await response.json();
-      } 
+      }
       // If user is not authenticated, save to localStorage
       else {
         savedTranslation = saveLocalTranslation(result);
@@ -446,9 +615,9 @@ export default function Translation() {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>🌍 Translation</CardTitle>
         {isPipSupported && (
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             onClick={togglePictureInPicture}
             className="ml-auto"
           >
@@ -487,14 +656,14 @@ export default function Translation() {
                 <SelectTrigger id="sourceLanguage">
                   <SelectValue placeholder="Auto detect" />
                 </SelectTrigger>
-                <SelectContent>
+                <DefaultSelectContent>
                   <SelectItem value="auto-detect">Auto detect</SelectItem>
                   {languages.map((lang) => (
                     <SelectItem key={lang.code} value={lang.code}>
                       {lang.name}
                     </SelectItem>
                   ))}
-                </SelectContent>
+                </DefaultSelectContent>
               </Select>
             </div>
 
@@ -507,13 +676,13 @@ export default function Translation() {
                 <SelectTrigger id="targetLanguage">
                   <SelectValue placeholder="Select language" />
                 </SelectTrigger>
-                <SelectContent>
+                <DefaultSelectContent>
                   {languages.map((lang) => (
                     <SelectItem key={lang.code} value={lang.code}>
                       {lang.name}
                     </SelectItem>
                   ))}
-                </SelectContent>
+                </DefaultSelectContent>
               </Select>
             </div>
           </div>
@@ -572,14 +741,14 @@ export default function Translation() {
             </div>
 
             <div className="text-xs text-muted-foreground">
-              Powered by Google Translate API
+              Powered by AI Translation
             </div>
           </div>
         </CardContent>
       )}
       <CardFooter className="text-xs text-muted-foreground">
         <p>
-          {isPipSupported 
+          {isPipSupported
             ? "Use 'Pop Out' to keep the translator in a floating window that stays on top of other windows."
             : "Picture-in-Picture is not supported in your browser."}
         </p>

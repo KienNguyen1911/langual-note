@@ -26,7 +26,7 @@ export const DockMenuProvider: React.FC<DockMenuProviderProps> = ({ children }) 
     vocabulary: true,
     translation: true,
     history: true,
-    video: true,
+    video: false,
   });
 
   // Function to toggle a card's visibility

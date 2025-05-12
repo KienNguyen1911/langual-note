@@ -18,7 +18,7 @@ function HomeContent() {
   return (
     <DotPatternBackground>
       <div className="min-h-screen py-4 md:py-8">
-        <header className="max-w-7xl mx-auto mb-8 ml-16">
+        <header className="mx-auto mb-8 ml-16 mr-16">
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-3xl font-bold text-foreground">Language Learning Hub</h1>
             <div className="flex items-center space-x-4">
@@ -32,7 +32,7 @@ function HomeContent() {
         </header>
 
         <main className="max-w mx-8 ml-16">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* First column */}
             <AnimatedCard isVisible={visibleCards.vocabulary} delay={1} className="space-y-6">
               <VocabularyNote />
@@ -49,15 +49,15 @@ function HomeContent() {
             </AnimatedCard>
 
             {/* Fourth column - Video Player with Picture-in-Picture */}
-            <AnimatedCard isVisible={visibleCards.video} delay={4} className="space-y-6">
-              <VideoPlayer />
-            </AnimatedCard>
+            {/*<AnimatedCard isVisible={visibleCards.video} delay={4} className="space-y-6">*/}
+            {/*  <VideoPlayer />*/}
+            {/*</AnimatedCard>*/}
           </div>
         </main>
 
-        <footer className="max-w-7xl mx-auto mt-12 text-center text-sm text-muted-foreground ml-16">
-          <p>Language Learning Hub - A simple application to help you learn languages</p>
-        </footer>
+        {/*<footer className="max-w-7xl mx-auto text-center text-sm text-muted-foreground ml-16">*/}
+        {/*  <p>Language Learning Hub - A simple application to help you learn languages</p>*/}
+        {/*</footer>*/}
 
         {/* Dock Menu */}
         <DockMenu />
